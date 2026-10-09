@@ -24,13 +24,24 @@ CANVAS_HEIGHT = min(800, int(root.winfo_screenheight() * 0.75))
 
 config = GridConfig(
     grid_range=math.ceil(max(CANVAS_WIDTH, CANVAS_HEIGHT) / 2 / SCALE),  # just covers the visible area
-    grid_step=1,
+    grid_step=2,
     segments=100,
     window_width=CANVAS_WIDTH,
     window_height=CANVAS_HEIGHT,
     scale=SCALE,
 )
 
+# The plane being displayed. Created here (math only, no canvas needed) so that anything below,
+# including slider callbacks, can rely on it existing.
+XY_grid = GridPlane(2, config, color="#fffb00")
+XY_grid.name = "XY_grid"
+XY_grid.tag = "XY_grid"
+YZ_grid = GridPlane(0, config, color="#0F13FF")
+YZ_grid.name = "YZ_grid"
+YZ_grid.tag = "YZ_grid"
+XZ_grid = GridPlane(1, config, color="#DC0BF8")
+XZ_grid.name = "XZ_grid"
+XZ_grid.tag = "XZ_grid"
 # UI state: the most recently parsed function, kept so later features (a point that rides
 # the curve, tangent lines) can evaluate it without re-parsing the text.
 current_function = None
@@ -57,8 +68,54 @@ status_var = tk.StringVar()
 status_label = tk.Label(controls, textvariable=status_var, fg="red")
 status_label.pack(side="left")
 
-canvas = tk.Canvas(root, bg="white", width=CANVAS_WIDTH, height=CANVAS_HEIGHT)
+# ROTATION SLIDERS (one per axis, in degrees)
+ROTATION_AXES = ("x", "y", "z")
+
+rotation_frame = tk.Frame(root)
+rotation_frame.pack(side="top", fill="x", padx=10)
+
+rotation_sliders = {}
+for axis_name in ROTATION_AXES:
+    # `a=axis_name` binds the CURRENT value of the loop variable into each lambda. Without it,
+    # every slider would use the last axis name, because the lambda looks the name up at call time.
+    slider = tk.Scale(
+        rotation_frame, from_=-180, to=180, orient="horizontal", length=250,
+        label=f"Rotate {axis_name.upper()} (degrees)",
+        command=lambda value, a=axis_name: on_rotation_slider(a, value),
+    )
+    slider.pack(side="left", padx=5)
+    rotation_sliders[axis_name] = slider
+
+tk.Button(rotation_frame, text="Reset", command=lambda: reset_rotation()).pack(side="left", padx=10)
+
+canvas = tk.Canvas(root, bg="grey", width=CANVAS_WIDTH, height=CANVAS_HEIGHT)
 canvas.pack()
+canvas.bind("<Button-1>", lambda e: handle_press(e))
+canvas.bind("<B1-Motion>", lambda e: handle_mouse_drag(e))
+
+is_dragging = False
+drag_x = 0
+drag_y = 0
+x = 0
+y = 0
+def handle_press(event):
+    global is_dragging, drag_x, drag_y
+    drag_x = event.x
+    drag_y = event.y
+    print(f"click event x:  {event.x}  click y:  {event.y}")
+    is_dragging = True
+
+def handle_mouse_drag(event):
+    global is_dragging, drag_x, drag_y, x, y
+    print(f"drag_x: {drag_x}    drag_y: {drag_y}    x:  {x}    y: {y}  ")
+    if is_dragging == True:
+        x += int(-(event.x - drag_x))
+        y += int(-(event.y - drag_y))
+        on_rotation_slider("x", y)
+        on_rotation_slider("y", x)
+        drag_x = event.x
+        drag_y = event.y
+
 
 
 #######################
@@ -133,6 +190,29 @@ def animate_vector(start_vector: Vector, end_vector: Vector, config, steps=300, 
 
 
 #######################
+# ROTATION CONTROLS
+#######################
+
+def on_rotation_slider(axis_name, degrees_text):
+    global gridplanes
+    """Called by a slider whenever it changes. A slider reports an ABSOLUTE angle (and as a string),
+    so we replace that one axis's stored angle and leave the other two alone. The plane rotates its
+    untouched base lines by the full stored angles every time, so nothing accumulates between events."""
+    for i in gridplanes:
+        angles = dict(zip(ROTATION_AXES, i.rotation))     # {"x": ..., "y": ..., "z": ...} in radians
+        angles[axis_name] = math.radians(float(degrees_text))
+        i.set_rotation(**angles)
+        draw_plane(i)
+        
+
+
+def reset_rotation():
+    """Setting a slider triggers its command, so this redraws as the sliders return to 0."""
+    for slider in rotation_sliders.values():
+        slider.set(0)
+
+
+#######################
 # PLOTTING A FUNCTION
 #######################
 
@@ -165,7 +245,10 @@ def graph_function(expression, *, config: GridConfig = config):
 #############################
 equation_entry_box.bind("<Return>", lambda event: graph_function(equation_entry_box.get()))
 
-XY_grid = GridPlane(2, config, color="#d9d9d9")
+gridplanes = [XY_grid, YZ_grid, XZ_grid]
+
 draw_plane(XY_grid)
+draw_plane(YZ_grid)
+draw_plane(XZ_grid)
 
 root.mainloop()

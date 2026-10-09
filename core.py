@@ -98,6 +98,7 @@ class GridPlane:
         self._divisions = generate_grid_divisions(config, origin)
         self._rotation = (0, 0, 0)  # angles (x, y, z), radians, applied about the world origin
         self.reconstruct()
+        self.name = ""
 
     # ---- rotation -------------------------------------------------------
     @property
@@ -176,6 +177,16 @@ class GridPlane:
     def set_custom_divisions(self, custom_divisions):
         self._divisions = custom_divisions
         self.reconstruct()
+
+
+
+
+
+
+
+
+
+        
 
 
 #############################
